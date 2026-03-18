@@ -19,6 +19,53 @@ const COLUMNS = [
   { id: "ideas",   label: "Ideas",                       color: "bg-purple-500", light: "bg-purple-50 border-purple-200", icon: "💡" },
 ];
 
+function exportToPDF(sessionName, cards) {
+  const date = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
+  const colColors = { well: "#22c55e", better: "#f97316", actions: "#3b82f6", ideas: "#a855f7" };
+
+  let html = `
+    <html><head><title>${sessionName} — Retro</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 40px; color: #1e293b; }
+      h1 { font-size: 24px; margin-bottom: 4px; }
+      .date { color: #64748b; font-size: 13px; margin-bottom: 32px; }
+      .column { margin-bottom: 28px; }
+      .col-header { padding: 10px 16px; border-radius: 8px 8px 0 0; color: white; font-weight: bold; font-size: 15px; }
+      .col-body { border: 2px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px; padding: 12px; }
+      .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; }
+      .card-text { font-size: 14px; margin: 0 0 4px 0; }
+      .card-author { font-size: 11px; color: #94a3b8; margin: 0; }
+      .empty { font-size: 13px; color: #94a3b8; font-style: italic; padding: 8px 0; }
+      @media print { body { margin: 20px; } }
+    </style></head><body>
+    <h1>🔄 ${sessionName}</h1>
+    <p class="date">Exported ${date}</p>
+  `;
+
+  COLUMNS.forEach(col => {
+    const colCards = cards.filter(c => c.col === col.id);
+    html += `<div class="column">
+      <div class="col-header" style="background:${colColors[col.id]}">${col.icon} ${col.label} (${colCards.length})</div>
+      <div class="col-body">`;
+    if (colCards.length === 0) {
+      html += `<p class="empty">No cards submitted.</p>`;
+    } else {
+      colCards.forEach(c => {
+        html += `<div class="card"><p class="card-text">${c.text}</p><p class="card-author">${c.author}</p></div>`;
+      });
+    }
+    html += `</div></div>`;
+  });
+
+  html += `</body></html>`;
+
+  const win = window.open("", "_blank");
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); }, 500);
+}
+
 export default function App() {
   const [screen, setScreen] = useState("home");
   const [sessionId, setSessionId] = useState("");
@@ -34,7 +81,6 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Real-time listener
   useEffect(() => {
     if (screen !== "board" || !sessionId) return;
     const sessionRef = ref(db, `sessions/${sessionId}`);
@@ -68,7 +114,6 @@ export default function App() {
     if (!id) return setError("Please enter a session ID.");
     if (!uname) return setError("Please enter your name.");
     setLoading(true);
-    // Check exists via a one-time read
     const { get } = await import("firebase/database");
     const snap = await get(ref(db, `sessions/${id}`));
     if (!snap.exists()) {
@@ -117,7 +162,6 @@ export default function App() {
     setNewSessionName("");
   };
 
-  // HOME
   if (screen === "home") return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -161,7 +205,6 @@ export default function App() {
     </div>
   );
 
-  // BOARD
   const cardsObj = session?.cards || {};
   const cards = Object.entries(cardsObj).map(([id, c]) => ({ id, ...c }));
   const revealed = session?.revealed || false;
@@ -179,11 +222,17 @@ export default function App() {
           </div>
           <div className="text-xs text-slate-400 mt-0.5">Signed in as <span className="text-slate-200 font-medium">{userName}</span></div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {isFacilitator && (
             <button onClick={toggleReveal}
               className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition ${revealed ? "bg-yellow-400 text-slate-900 hover:bg-yellow-300" : "bg-green-500 text-white hover:bg-green-400"}`}>
               {revealed ? "🙈 Hide Cards" : "👁 Reveal All"}
+            </button>
+          )}
+          {canSeeAll && (
+            <button onClick={() => exportToPDF(session?.name || "Retro", cards)}
+              className="text-xs bg-slate-600 hover:bg-slate-500 text-white font-semibold px-3 py-1.5 rounded-lg transition">
+              📄 Export PDF
             </button>
           )}
           <button onClick={leaveSession} className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-lg transition">Leave</button>
